@@ -1,5 +1,5 @@
 use std::{cell::RefCell, ptr::null_mut, rc::Rc};
-
+use num_enum::TryFromPrimitive;
 use crate::*;
 
 #[derive(Debug)]
@@ -28,6 +28,16 @@ impl Context {
 
     pub fn synchronize(&self) -> CudaResult<()> {
         cuda_error(unsafe { sys::cuCtxSynchronize() })
+    }
+
+    pub fn set_limit(&mut self, limit: LimitType, value: u64) -> CudaResult<()> {
+        cuda_error(unsafe { sys::cuCtxSetLimit(limit as u32, value) })
+    }
+
+    pub fn get_limit(&self, limit: LimitType) -> CudaResult<u64> {
+        let mut out = 0u64;
+        cuda_error(unsafe { sys::cuCtxGetLimit(&mut out as *mut u64, limit as u32) })?;
+        Ok(out)
     }
 
     pub fn enter<'a>(&'a mut self) -> CudaResult<Rc<Handle<'a>>> {
@@ -78,4 +88,23 @@ impl<'a> Drop for Handle<'a> {
             eprintln!("CUDA: error dropping context handle: {:?}", e);
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, TryFromPrimitive)]
+#[repr(u32)]
+pub enum LimitType {
+    /// GPU thread stack size
+    StackSize = 0x00,
+    /// GPU printf FIFO size
+    PrintfFifoSize = 0x01,
+    /// GPU malloc heap size
+    MallocHeapSize = 0x02,
+    /// GPU device runtime launch synchronize depth
+    DevRuntimeSyncDepth = 0x03,
+    /// GPU device runtime pending launch count
+    DevRuntimePendingLaunchCount = 0x04,
+    /// A value between 0 and 128 that indicates the maximum fetch granularity of L2 (in Bytes). This is a hint
+    MaxL2FetchGranularity = 0x05,
+    /// A size in bytes for L2 persisting lines cache size
+    PersistingL2CacheSize = 0x06,
 }
