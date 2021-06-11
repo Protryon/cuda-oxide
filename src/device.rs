@@ -26,7 +26,7 @@ impl Device {
     pub fn name(&self) -> CudaResult<String> {
         let mut buf = [0u8; 256];
         cuda_error(unsafe {
-            sys::cuDeviceGetName(&mut buf as *mut u8 as *mut i8, 256, self.handle)
+            sys::cuDeviceGetName(buf.as_mut_ptr() as *mut i8, 256, self.handle)
         })?;
         Ok(
             String::from_utf8_lossy(&buf[..buf.iter().position(|x| *x == 0).unwrap_or(0)])
