@@ -1,6 +1,7 @@
 use crate::*;
 use num_enum::TryFromPrimitive;
 
+/// A [`Function`]-specific attribute type
 #[derive(Debug, Copy, Clone, TryFromPrimitive)]
 #[repr(u32)]
 pub enum FunctionAttribute {
@@ -26,6 +27,7 @@ pub enum FunctionAttribute {
     PreferredSharedMemoryCarveout = 9,
 }
 
+/// A [`Function`] cache config
 #[derive(Debug, Copy, Clone, TryFromPrimitive)]
 #[repr(u32)]
 pub enum FuncCache {
@@ -39,6 +41,7 @@ pub enum FuncCache {
     PreferEqual = 0x03,
 }
 
+/// A [`Function`] shared memory config
 #[derive(Debug, Copy, Clone, TryFromPrimitive)]
 #[repr(u32)]
 pub enum FuncSharedConfig {
@@ -50,6 +53,7 @@ pub enum FuncSharedConfig {
     EightByteBankSize = 0x02,
 }
 
+/// Represents an individual callable Kernel loaded from a [`Module`]
 pub struct Function<'a, 'b> {
     pub(crate) module: &'b Module<'a>,
     pub(crate) inner: *mut sys::CUfunc_st,

@@ -4,6 +4,7 @@ use std::{
     fmt::{self, Debug},
 };
 
+/// A device-sourced or `libcuda`-sourced error code
 #[derive(Debug, Copy, Clone, TryFromPrimitive)]
 #[repr(u32)]
 pub enum ErrorCode {
@@ -308,7 +309,7 @@ impl Error for ErrorCode {}
 
 pub type CudaResult<T> = Result<T, ErrorCode>;
 
-pub fn cuda_error(input: u32) -> CudaResult<()> {
+pub(crate) fn cuda_error(input: u32) -> CudaResult<()> {
     if input == 0 {
         Ok(())
     } else {

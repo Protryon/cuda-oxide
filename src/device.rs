@@ -1,10 +1,12 @@
 use crate::*;
 use num_enum::TryFromPrimitive;
 
+/// A reference to a CUDA-enabled device
 pub struct Device {
     pub(crate) handle: i32,
 }
 
+/// Type of native array format
 #[derive(Clone, Copy, Debug, TryFromPrimitive)]
 #[repr(u32)]
 pub enum CudaArrayFormat {
@@ -20,6 +22,7 @@ pub enum CudaArrayFormat {
 }
 
 impl Device {
+    /// Fetches a human-readable name from the device
     pub fn name(&self) -> CudaResult<String> {
         let mut buf = [0u8; 256];
         cuda_error(unsafe {
@@ -31,12 +34,14 @@ impl Device {
         )
     }
 
+    /// Gets a UUID from the device
     pub fn uuid(&self) -> CudaResult<u128> {
         let mut out = 0u128;
         cuda_error(unsafe { sys::cuDeviceGetUuid(&mut out as *mut u128 as *mut _, self.handle) })?;
         Ok(out)
     }
 
+    /// Gets the total available memory size of the device, in bytes
     pub fn memory_size(&self) -> CudaResult<usize> {
         let mut memory_size = 0usize;
         cuda_error(unsafe {
@@ -45,6 +50,7 @@ impl Device {
         Ok(memory_size)
     }
 
+    /// Gets a current attribute value for the device
     pub fn get_attribute(&self, attribute: DeviceAttribute) -> CudaResult<i32> {
         let mut out = 0i32;
         cuda_error(unsafe {
@@ -53,6 +59,7 @@ impl Device {
         Ok(out)
     }
 
+    /// Calculates the linear max width of 1D textures for a given native array format
     pub fn get_texture_1d_linear_max_width(
         &self,
         format: CudaArrayFormat,
@@ -72,6 +79,7 @@ impl Device {
 }
 
 impl Cuda {
+    /// List all CUDA-enabled devices on the host
     pub fn list_devices() -> CudaResult<Vec<Device>> {
         let mut count = 0i32;
         cuda_error(unsafe { sys::cuDeviceGetCount(&mut count as *mut i32) })?;
@@ -85,6 +93,7 @@ impl Cuda {
     }
 }
 
+/// A [`Device`]-specific attribute type
 #[derive(Clone, Copy, Debug, TryFromPrimitive)]
 #[repr(u32)]
 pub enum DeviceAttribute {

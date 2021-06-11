@@ -1,5 +1,6 @@
 use crate::{DeviceBox, DevicePtr};
 
+/// Some data able to represent one or more kernel parameters
 pub trait KernelParameters {
     fn params(&self, out: &mut Vec<Vec<u8>>);
 }

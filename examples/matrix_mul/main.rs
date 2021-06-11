@@ -46,8 +46,7 @@ fn main() {
     let device_mat_a = DeviceBox::new(&handle, matrix_bytes(&mat_a[..])).unwrap();
     let device_mat_b = DeviceBox::new(&handle, matrix_bytes(&mat_b[..])).unwrap();
 
-    let output =
-        unsafe { DeviceBox::alloc(&handle, C_WIDTH as u64 * C_HEIGHT as u64 * 8) }.unwrap();
+    let output = DeviceBox::alloc(&handle, C_WIDTH as u64 * C_HEIGHT as u64 * 8).unwrap();
 
     handle.context().synchronize().unwrap();
 

@@ -3,6 +3,7 @@ use crate::{
     sys, Cuda,
 };
 
+/// A CUDA device or API version
 #[derive(Clone, Copy, Debug)]
 pub struct CudaVersion {
     pub major: u32,
@@ -19,6 +20,7 @@ impl From<u32> for CudaVersion {
 }
 
 impl Cuda {
+    /// Gets the local driver version (not to be confused with device compute capability)
     pub fn version() -> CudaResult<CudaVersion> {
         let mut version = 0i32;
         cuda_error(unsafe { sys::cuDriverGetVersion(&mut version as *mut i32) })?;

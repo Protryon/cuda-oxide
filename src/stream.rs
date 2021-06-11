@@ -3,11 +3,13 @@ use std::{ffi::c_void, marker::PhantomData, ptr::null_mut, rc::Rc};
 
 use crate::*;
 
+/// A stream of asynchronous operations operating in a [`Context`]
 pub struct Stream<'a> {
     pub(crate) inner: *mut sys::CUstream_st,
     _p: PhantomData<&'a ()>,
 }
 
+/// Wait comparison type for waiting on some condition in [`Stream::wait_32`]/etc
 #[derive(Debug, Copy, Clone, TryFromPrimitive)]
 #[repr(u32)]
 pub enum WaitValueMode {
@@ -27,6 +29,7 @@ unsafe extern "C" fn host_callback(arg: *mut std::ffi::c_void) {
 }
 
 impl<'a> Stream<'a> {
+    /// Creates a new stream for a handle
     pub fn new(_handle: &Rc<Handle<'a>>) -> CudaResult<Self> {
         let mut out = null_mut();
         cuda_error(unsafe {
@@ -41,10 +44,12 @@ impl<'a> Stream<'a> {
         })
     }
 
+    /// Drives all pending tasks on the stream to completion
     pub fn sync(&mut self) -> CudaResult<()> {
         cuda_error(unsafe { sys::cuStreamSynchronize(self.inner) })
     }
 
+    /// Wait for a 4-byte value in a specific location to compare to `value` by `mode`.
     pub fn wait_32<'b>(
         &'b mut self,
         addr: &'b DevicePtr<'a>,
@@ -61,6 +66,7 @@ impl<'a> Stream<'a> {
         })
     }
 
+    /// Wait for a 8-byte value in a specific location to compare to `value` by `mode`.
     pub fn wait_64<'b>(
         &mut self,
         addr: &'b DevicePtr<'a>,
@@ -77,9 +83,10 @@ impl<'a> Stream<'a> {
         })
     }
 
+    /// Writes a 4-byte value to device memory asynchronously
     pub fn write_32<'b>(
         &'b mut self,
-        addr: &'b mut DevicePtr<'a>,
+        addr: &'b DevicePtr<'a>,
         value: u32,
         no_memory_barrier: bool,
     ) -> CudaResult<()> {
@@ -92,9 +99,10 @@ impl<'a> Stream<'a> {
         })
     }
 
+    /// Writes a 8-byte value to device memory asynchronously
     pub fn write_64<'b>(
         &'b mut self,
-        addr: &'b mut DevicePtr<'a>,
+        addr: &'b DevicePtr<'a>,
         value: u64,
         no_memory_barrier: bool,
     ) -> CudaResult<()> {
@@ -107,6 +115,9 @@ impl<'a> Stream<'a> {
         })
     }
 
+    /// Calls a callback closure function `callback` once all prior tasks in the Stream have been driven to completion.
+    /// Note that it is a memory leak to drop the stream before this callback is called
+    /// Also note that it is undefined behavior in `libcuda` to make any calls to `libcuda` from this callback.
     pub fn callback<F: FnOnce()>(&mut self, callback: F) -> CudaResult<()> {
         let callback: Box<Box<dyn FnOnce()>> = Box::new(Box::new(callback));
         cuda_error(unsafe {
@@ -118,6 +129,8 @@ impl<'a> Stream<'a> {
         })
     }
 
+    /// Launch a CUDA kernel on this [`Stream`] with the given `grid_dim` grid dimensions, `block_dim` block dimensions, `shared_mem_size` allocated shared memory pool, and `parameters` kernel parameters.
+    /// It is undefined behavior to pass in parameters that do not conform to the passes CUDA kernel.
     pub fn launch<'b, D1: Into<Dim3>, D2: Into<Dim3>, K: KernelParameters>(
         &mut self,
         f: &Function<'a, 'b>,

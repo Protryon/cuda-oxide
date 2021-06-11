@@ -1,5 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
+/// A dimensional value equivalent to a 3-tuple of u32
 pub struct Dim3(pub (u32, u32, u32));
 
 impl Deref for Dim3 {
