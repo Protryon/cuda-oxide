@@ -171,7 +171,7 @@ impl<'a> Linker<'a> {
                 self.inner,
                 format,
                 data.as_ptr() as *mut u8 as *mut c_void,
-                data.len() as u64,
+                data.len() as sys::size_t,
                 name.as_ptr(),
                 0,
                 null_mut(),
@@ -189,19 +189,19 @@ impl<'a> Linker<'a> {
     /// Emit the cubin assembly binary. You probably want [`Linker::build_module`]
     pub fn build(&self) -> CudaResult<&[u8]> {
         let mut cubin_out: *mut c_void = null_mut();
-        let mut size_out = 0usize;
+        let mut size_out: sys::size_t = 0;
         let out = cuda_error(unsafe {
             sys::cuLinkComplete(
                 self.inner,
                 &mut cubin_out as *mut *mut c_void,
-                &mut size_out as *mut usize as *mut u64,
+                &mut size_out as *mut sys::size_t,
             )
         });
         self.emit_logs();
         if let Err(e) = out {
             return Err(e);
         }
-        Ok(unsafe { std::slice::from_raw_parts(cubin_out as *const u8, size_out) })
+        Ok(unsafe { std::slice::from_raw_parts(cubin_out as *const u8, size_out as usize) })
     }
 
     /// Build a CUDA module from this [`Linker`].

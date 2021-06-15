@@ -38,14 +38,14 @@ impl Context {
 
     /// Set a CUDA context limit
     pub fn set_limit(&mut self, limit: LimitType, value: u64) -> CudaResult<()> {
-        cuda_error(unsafe { sys::cuCtxSetLimit(limit as u32, value) })
+        cuda_error(unsafe { sys::cuCtxSetLimit(limit as u32, value as sys::size_t) })
     }
 
     /// Get a CUDA context limit
     pub fn get_limit(&self, limit: LimitType) -> CudaResult<u64> {
-        let mut out = 0u64;
-        cuda_error(unsafe { sys::cuCtxGetLimit(&mut out as *mut u64, limit as u32) })?;
-        Ok(out)
+        let mut out: sys::size_t = 0;
+        cuda_error(unsafe { sys::cuCtxGetLimit(&mut out as *mut sys::size_t, limit as u32) })?;
+        Ok(out as u64)
     }
 
     /// Enter a [`Context`], consuming a mutable reference to the context, and allowing thread-local operations to happen.

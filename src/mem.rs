@@ -136,7 +136,7 @@ impl<'a> DevicePtr<'a> {
     pub fn load(&self) -> CudaResult<Vec<u8>> {
         let mut buf = Vec::with_capacity(self.len as usize);
         cuda_error(unsafe {
-            sys::cuMemcpyDtoH_v2(buf.as_mut_ptr() as *mut _, self.inner, self.len)
+            sys::cuMemcpyDtoH_v2(buf.as_mut_ptr() as *mut _, self.inner, self.len as sys::size_t)
         })?;
         unsafe { buf.set_len(self.len as usize) };
         Ok(buf)
@@ -150,7 +150,7 @@ impl<'a> DevicePtr<'a> {
         cuda_error(sys::cuMemcpyDtoHAsync_v2(
             buf.as_mut_ptr() as *mut _,
             self.inner,
-            self.len,
+            self.len as sys::size_t,
             stream.inner,
         ))?;
         buf.set_len(self.len as usize);
@@ -165,7 +165,7 @@ impl<'a> DevicePtr<'a> {
             panic!("underflow in DevicePtr::store");
         }
         cuda_error(unsafe {
-            sys::cuMemcpyHtoD_v2(self.inner, data.as_ptr() as *const _, self.len)
+            sys::cuMemcpyHtoD_v2(self.inner, data.as_ptr() as *const _, self.len as sys::size_t)
         })?;
         Ok(())
     }
@@ -181,7 +181,7 @@ impl<'a> DevicePtr<'a> {
         cuda_error(sys::cuMemcpyHtoDAsync_v2(
             self.inner,
             data.as_ptr() as *const _,
-            self.len,
+            self.len as sys::size_t,
             stream.inner,
         ))?;
         Ok(())
@@ -189,12 +189,12 @@ impl<'a> DevicePtr<'a> {
 
     /// Synchronously set the contents of `self` to `data` repeated to fill length
     pub fn memset_d8(&self, data: u8) -> CudaResult<()> {
-        cuda_error(unsafe { sys::cuMemsetD8_v2(self.inner, data, self.len) })
+        cuda_error(unsafe { sys::cuMemsetD8_v2(self.inner, data, self.len as sys::size_t) })
     }
 
     /// Asynchronously set the contents of `self` to `data` repeated to fill length
     pub fn memset_d8_stream(&self, data: u8, stream: &mut Stream<'a>) -> CudaResult<()> {
-        cuda_error(unsafe { sys::cuMemsetD8Async(self.inner, data, self.len, stream.inner) })
+        cuda_error(unsafe { sys::cuMemsetD8Async(self.inner, data, self.len as sys::size_t, stream.inner) })
     }
 
     /// Synchronously set the contents of `self` to `data` repeated to fill length.
@@ -203,7 +203,7 @@ impl<'a> DevicePtr<'a> {
         if self.len % 2 != 0 {
             panic!("alignment failure in DevicePtr::memset_d16");
         }
-        cuda_error(unsafe { sys::cuMemsetD16_v2(self.inner, data, self.len / 2) })
+        cuda_error(unsafe { sys::cuMemsetD16_v2(self.inner, data, self.len as sys::size_t / 2) })
     }
 
     /// Asynchronously set the contents of `self` to `data` repeated to fill length.
@@ -212,7 +212,7 @@ impl<'a> DevicePtr<'a> {
         if self.len % 2 != 0 {
             panic!("alignment failure in DevicePtr::memset_d16_stream");
         }
-        cuda_error(unsafe { sys::cuMemsetD16Async(self.inner, data, self.len / 2, stream.inner) })
+        cuda_error(unsafe { sys::cuMemsetD16Async(self.inner, data, self.len as sys::size_t / 2, stream.inner) })
     }
 
     /// Synchronously set the contents of `self` to `data` repeated to fill length.
@@ -221,7 +221,7 @@ impl<'a> DevicePtr<'a> {
         if self.len % 4 != 0 {
             panic!("alignment failure in DevicePtr::memset_d32");
         }
-        cuda_error(unsafe { sys::cuMemsetD32_v2(self.inner, data, self.len / 4) })
+        cuda_error(unsafe { sys::cuMemsetD32_v2(self.inner, data, self.len as sys::size_t / 4) })
     }
 
     /// Asynchronously set the contents of `self` to `data` repeated to fill length.
@@ -230,7 +230,7 @@ impl<'a> DevicePtr<'a> {
         if self.len % 4 != 0 {
             panic!("alignment failure in DevicePtr::memset_d32_stream");
         }
-        cuda_error(unsafe { sys::cuMemsetD32Async(self.inner, data, self.len / 4, stream.inner) })
+        cuda_error(unsafe { sys::cuMemsetD32Async(self.inner, data, self.len as sys::size_t / 4, stream.inner) })
     }
 
     /// Gets a reference to the owning handle
@@ -248,7 +248,7 @@ impl<'a> DeviceBox<'a> {
     /// Allocate an uninitialized buffer of size `size` on the device
     pub fn alloc(handle: &Rc<Handle<'a>>, size: u64) -> CudaResult<Self> {
         let mut out = 0u64;
-        cuda_error(unsafe { sys::cuMemAlloc_v2(&mut out as *mut u64, size) })?;
+        cuda_error(unsafe { sys::cuMemAlloc_v2(&mut out as *mut u64, size as sys::size_t) })?;
         Ok(DeviceBox {
             inner: DevicePtr {
                 handle: handle.clone(),
