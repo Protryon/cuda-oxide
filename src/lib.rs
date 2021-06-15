@@ -1,6 +1,4 @@
-#![allow(
-    clippy::missing_safety_doc,
-)]
+#![allow(clippy::missing_safety_doc)]
 
 #[allow(
     non_upper_case_globals,

@@ -23,14 +23,15 @@ impl Context {
         Ok(Context { inner })
     }
 
-    /// Gets the api version of the Context
+    /// Gets the API version of the [`Context`].
+    /// This is not the compute capability of the device and probably not what you are looking for. See [`Device::compute_capability`]
     pub fn version(&self) -> CudaResult<CudaVersion> {
         let mut out = 0u32;
         cuda_error(unsafe { sys::cuCtxGetApiVersion(self.inner, &mut out as *mut u32) })?;
         Ok(out.into())
     }
 
-    /// Synchronize a Context, running all active handles to completion
+    /// Synchronize a [`Context`], running all active handles to completion
     pub fn synchronize(&self) -> CudaResult<()> {
         cuda_error(unsafe { sys::cuCtxSynchronize() })
     }
@@ -47,7 +48,7 @@ impl Context {
         Ok(out)
     }
 
-    /// Enter a Context, consuming a mutable reference to the context, and allowing thread-local operations to happen.
+    /// Enter a [`Context`], consuming a mutable reference to the context, and allowing thread-local operations to happen.
     pub fn enter<'a>(&'a mut self) -> CudaResult<Rc<Handle<'a>>> {
         cuda_error(unsafe { sys::cuCtxSetCurrent(self.inner) })?;
         Ok(Rc::new(Handle {

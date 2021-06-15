@@ -25,9 +25,7 @@ impl Device {
     /// Fetches a human-readable name from the device
     pub fn name(&self) -> CudaResult<String> {
         let mut buf = [0u8; 256];
-        cuda_error(unsafe {
-            sys::cuDeviceGetName(buf.as_mut_ptr() as *mut i8, 256, self.handle)
-        })?;
+        cuda_error(unsafe { sys::cuDeviceGetName(buf.as_mut_ptr() as *mut i8, 256, self.handle) })?;
         Ok(
             String::from_utf8_lossy(&buf[..buf.iter().position(|x| *x == 0).unwrap_or(0)])
                 .into_owned(),
@@ -57,6 +55,14 @@ impl Device {
             sys::cuDeviceGetAttribute(&mut out as *mut i32, attribute as u32, self.handle)
         })?;
         Ok(out)
+    }
+
+    /// Gets the compute capability of the device
+    pub fn compute_capability(&self) -> CudaResult<CudaVersion> {
+        Ok(CudaVersion {
+            major: self.get_attribute(DeviceAttribute::ComputeCapabilityMajor)? as u32,
+            minor: self.get_attribute(DeviceAttribute::ComputeCapabilityMinor)? as u32,
+        })
     }
 
     /// Calculates the linear max width of 1D textures for a given native array format
