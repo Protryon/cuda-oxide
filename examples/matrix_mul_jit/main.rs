@@ -63,8 +63,8 @@ fn main() {
     assert_eq!(&rea[..], matrix_bytes(&mat_a[..]));
 
     let mut stream = Stream::new(&handle).unwrap();
-    stream
-        .launch(
+    unsafe {
+        stream.launch(
             &function,
             (C_WIDTH as u32 / BLOCK_SIZE, C_HEIGHT as u32 / BLOCK_SIZE),
             (BLOCK_SIZE, BLOCK_SIZE),
@@ -77,7 +77,8 @@ fn main() {
                 B_WIDTH as usize,
             ),
         )
-        .unwrap();
+    }
+    .unwrap();
 
     stream.callback(|| println!("done")).unwrap();
 

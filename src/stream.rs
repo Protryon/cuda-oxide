@@ -1,11 +1,12 @@
 use num_enum::TryFromPrimitive;
-use std::{ffi::c_void, marker::PhantomData, ptr::null_mut, rc::Rc};
+use std::{ffi::c_void, marker::PhantomData, pin::Pin, ptr::null_mut, rc::Rc};
 
 use crate::*;
 
 /// A stream of asynchronous operations operating in a [`Context`]
 pub struct Stream<'a> {
     pub(crate) inner: *mut sys::CUstream_st,
+    pub(crate) pending_stores: Vec<Pin<Box<[u8]>>>,
     _p: PhantomData<&'a ()>,
 }
 
@@ -24,7 +25,7 @@ pub enum WaitValueMode {
 }
 
 unsafe extern "C" fn host_callback(arg: *mut std::ffi::c_void) {
-    let closure: Box<Box<dyn FnOnce()>> = Box::from_raw(arg as *mut _);
+    let closure: Box<Box<dyn FnOnce() + Send + Sync>> = Box::from_raw(arg as *mut _);
     closure();
 }
 
@@ -40,13 +41,25 @@ impl<'a> Stream<'a> {
         })?;
         Ok(Self {
             inner: out,
+            pending_stores: vec![],
             _p: PhantomData,
         })
     }
 
     /// Drives all pending tasks on the stream to completion
     pub fn sync(&mut self) -> CudaResult<()> {
-        cuda_error(unsafe { sys::cuStreamSynchronize(self.inner) })
+        cuda_error(unsafe { sys::cuStreamSynchronize(self.inner) })?;
+        self.pending_stores.clear();
+        Ok(())
+    }
+
+    /// Returns `Ok(true)` if the stream has finished processing all queued tasks.
+    pub fn is_synced(&self) -> CudaResult<bool> {
+        match cuda_error(unsafe { sys::cuStreamQuery(self.inner) }) {
+            Ok(()) => Ok(true),
+            Err(ErrorCode::NotReady) => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 
     /// Wait for a 4-byte value in a specific location to compare to `value` by `mode`.
@@ -116,9 +129,11 @@ impl<'a> Stream<'a> {
     }
 
     /// Calls a callback closure function `callback` once all prior tasks in the Stream have been driven to completion.
-    /// Note that it is a memory leak to drop the stream before this callback is called
-    /// Also note that it is undefined behavior in `libcuda` to make any calls to `libcuda` from this callback.
-    pub fn callback<F: FnOnce()>(&mut self, callback: F) -> CudaResult<()> {
+    /// Note that it is a memory leak to drop the stream before this callback is called.
+    /// The callback is not guaranteed to be called if the stream errors out.
+    /// Also note that it is erroneous in `libcuda` to make any calls to `libcuda` from this callback.
+    /// The callback is called from a CUDA internal thread, however this is an implementation detail of `libcuda` and not guaranteed.
+    pub fn callback<F: FnOnce() + Send + Sync>(&mut self, callback: F) -> CudaResult<()> {
         let callback: Box<Box<dyn FnOnce()>> = Box::new(Box::new(callback));
         cuda_error(unsafe {
             sys::cuLaunchHostFunc(
@@ -130,8 +145,9 @@ impl<'a> Stream<'a> {
     }
 
     /// Launch a CUDA kernel on this [`Stream`] with the given `grid_dim` grid dimensions, `block_dim` block dimensions, `shared_mem_size` allocated shared memory pool, and `parameters` kernel parameters.
-    /// It is undefined behavior to pass in parameters that do not conform to the passes CUDA kernel.
-    pub fn launch<'b, D1: Into<Dim3>, D2: Into<Dim3>, K: KernelParameters>(
+    /// It is undefined behavior to pass in `parameters` that do not conform to the passes CUDA kernel. If the argument count is wrong, CUDA will generally throw an error.
+    /// If your `parameters` is accurate to the kernel definition, then this function is otherwise safe.
+    pub unsafe fn launch<'b, D1: Into<Dim3>, D2: Into<Dim3>, K: KernelParameters>(
         &mut self,
         f: &Function<'a, 'b>,
         grid_dim: D1,
@@ -147,21 +163,19 @@ impl<'a> Stream<'a> {
         for param in &kernel_params {
             new_kernel_params.push(param.as_ptr() as *mut c_void);
         }
-        cuda_error(unsafe {
-            sys::cuLaunchKernel(
-                f.inner,
-                grid_dim.0,
-                grid_dim.1,
-                grid_dim.2,
-                block_dim.0,
-                block_dim.1,
-                block_dim.2,
-                shared_mem_size,
-                self.inner,
-                new_kernel_params.as_mut_ptr(),
-                null_mut(),
-            )
-        })
+        cuda_error(sys::cuLaunchKernel(
+            f.inner,
+            grid_dim.0,
+            grid_dim.1,
+            grid_dim.2,
+            block_dim.0,
+            block_dim.1,
+            block_dim.2,
+            shared_mem_size,
+            self.inner,
+            new_kernel_params.as_mut_ptr(),
+            null_mut(),
+        ))
     }
 }
 

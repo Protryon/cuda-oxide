@@ -8,16 +8,32 @@
 `cuda-oxide` *does not* offer any safety on the GPU-side of writing CUDA code. It doesn't compile Rust to PTX. `cuda-oxide` offers general CPU-level safety working with the CUDA library and best-availability safety for working with GPU buffers and objects.
 
 Examples of things currently considered safe:
-* Reading from an uninitialized GPU buffer
-* Reading from a GPU buffer currently being streamed and in an indeterminate state
-* Passing garbage/invalid data to CUDA kernel parameters
+* Reading from an uninitialized GPU buffer into host memory
 * Some invalid `libcuda` operations that will cause `libcuda` to stop accepting any API calls
 * Setting various attributes that can have side effects for an entire device
 * Writing to read-only device memory
 
-### Notable Exception
+## Supported Features
+* Device Management
+* Context Management
+* Module Management
+* JIT compilation of Modules
+* Stream Management
+* Kernel Execution
+* Device Memory read/write
 
-`cuda-oxide` doesn't parse compiled binaries to find a valid CUDA signature. It is possible to to load a kernel that will some number of parameters, pass in fewer from Rust, and get a segfault. We would need to write a Fatbin/etc parser to remedy this.
+## Unsupported Features
+* Memory Pools
+* Unified Addressing
+* Events & Stream Events
+* Stream State Polling
+* Stream Graph Capturing
+* Stream Batch Memory Operations
+* External Memory
+* Multi-device helper (possible already, but not made easy)
+* Graphs
+* Textures & Surfaces
+* OpenGL/VDPAU/EGL Interoperability
 
 ## Examples
 

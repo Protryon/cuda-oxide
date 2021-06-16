@@ -1,5 +1,6 @@
 use std::{
     ops::{Deref, DerefMut},
+    pin::Pin,
     rc::Rc,
 };
 
@@ -136,7 +137,11 @@ impl<'a> DevicePtr<'a> {
     pub fn load(&self) -> CudaResult<Vec<u8>> {
         let mut buf = Vec::with_capacity(self.len as usize);
         cuda_error(unsafe {
-            sys::cuMemcpyDtoH_v2(buf.as_mut_ptr() as *mut _, self.inner, self.len as sys::size_t)
+            sys::cuMemcpyDtoH_v2(
+                buf.as_mut_ptr() as *mut _,
+                self.inner,
+                self.len as sys::size_t,
+            )
         })?;
         unsafe { buf.set_len(self.len as usize) };
         Ok(buf)
@@ -165,25 +170,52 @@ impl<'a> DevicePtr<'a> {
             panic!("underflow in DevicePtr::store");
         }
         cuda_error(unsafe {
-            sys::cuMemcpyHtoD_v2(self.inner, data.as_ptr() as *const _, self.len as sys::size_t)
+            sys::cuMemcpyHtoD_v2(
+                self.inner,
+                data.as_ptr() as *const _,
+                self.len as sys::size_t,
+            )
         })?;
         Ok(())
     }
 
     /// Asynchronously stores host data from `data` to `self`.
     /// The `data` must not be dropped or mutated until `stream.sync` is called.
-    pub unsafe fn store_stream(&self, data: &[u8], stream: &mut Stream<'a>) -> CudaResult<()> {
+    pub fn store_stream<'b>(&self, data: &'b [u8], stream: &'b mut Stream<'a>) -> CudaResult<()> {
         if data.len() > self.len as usize {
             panic!("overflow in DevicePtr::store");
         } else if data.len() < self.len as usize {
             panic!("underflow in DevicePtr::store");
         }
-        cuda_error(sys::cuMemcpyHtoDAsync_v2(
-            self.inner,
-            data.as_ptr() as *const _,
-            self.len as sys::size_t,
-            stream.inner,
-        ))?;
+        cuda_error(unsafe {
+            sys::cuMemcpyHtoDAsync_v2(
+                self.inner,
+                data.as_ptr() as *const _,
+                self.len as sys::size_t,
+                stream.inner,
+            )
+        })?;
+        Ok(())
+    }
+
+    /// Asynchronously stores host data from `data` to `self`.
+    /// `data` will be dropped once the [`Stream`] is synced or dropped.
+    pub fn store_stream_buf(&self, data: Vec<u8>, stream: &mut Stream<'a>) -> CudaResult<()> {
+        if data.len() > self.len as usize {
+            panic!("overflow in DevicePtr::store");
+        } else if data.len() < self.len as usize {
+            panic!("underflow in DevicePtr::store");
+        }
+        let data: Pin<Box<[u8]>> = data.into_boxed_slice().into();
+        stream.pending_stores.push(data);
+        cuda_error(unsafe {
+            sys::cuMemcpyHtoDAsync_v2(
+                self.inner,
+                stream.pending_stores.last().unwrap().as_ptr() as *const _,
+                self.len as sys::size_t,
+                stream.inner,
+            )
+        })?;
         Ok(())
     }
 
@@ -194,7 +226,9 @@ impl<'a> DevicePtr<'a> {
 
     /// Asynchronously set the contents of `self` to `data` repeated to fill length
     pub fn memset_d8_stream(&self, data: u8, stream: &mut Stream<'a>) -> CudaResult<()> {
-        cuda_error(unsafe { sys::cuMemsetD8Async(self.inner, data, self.len as sys::size_t, stream.inner) })
+        cuda_error(unsafe {
+            sys::cuMemsetD8Async(self.inner, data, self.len as sys::size_t, stream.inner)
+        })
     }
 
     /// Synchronously set the contents of `self` to `data` repeated to fill length.
@@ -212,7 +246,9 @@ impl<'a> DevicePtr<'a> {
         if self.len % 2 != 0 {
             panic!("alignment failure in DevicePtr::memset_d16_stream");
         }
-        cuda_error(unsafe { sys::cuMemsetD16Async(self.inner, data, self.len as sys::size_t / 2, stream.inner) })
+        cuda_error(unsafe {
+            sys::cuMemsetD16Async(self.inner, data, self.len as sys::size_t / 2, stream.inner)
+        })
     }
 
     /// Synchronously set the contents of `self` to `data` repeated to fill length.
@@ -230,7 +266,9 @@ impl<'a> DevicePtr<'a> {
         if self.len % 4 != 0 {
             panic!("alignment failure in DevicePtr::memset_d32_stream");
         }
-        cuda_error(unsafe { sys::cuMemsetD32Async(self.inner, data, self.len as sys::size_t / 4, stream.inner) })
+        cuda_error(unsafe {
+            sys::cuMemsetD32Async(self.inner, data, self.len as sys::size_t / 4, stream.inner)
+        })
     }
 
     /// Gets a reference to the owning handle
@@ -265,16 +303,29 @@ impl<'a> DeviceBox<'a> {
         Ok(buf)
     }
 
-    /// Allocates a new uninitialized buffer on the device, then synchronously fills it with `input`.
+    /// Allocates a new uninitialized buffer on the device, then asynchronously fills it with `input`.
     /// `input` must not be dropped or mutated until `stream.sync` is called.
     /// Does not allocate the memory asynchronously.
-    pub unsafe fn new_stream(
+    pub fn new_stream<'b>(
         handle: &Rc<Handle<'a>>,
-        input: &[u8],
-        stream: &mut Stream<'a>,
+        input: &'b [u8],
+        stream: &'b mut Stream<'a>,
     ) -> CudaResult<Self> {
         let buf = Self::alloc(handle, input.len() as u64)?;
         buf.store_stream(input, stream)?;
+        Ok(buf)
+    }
+
+    /// Allocates a new uninitialized buffer on the device, then synchronously fills it with `input`.
+    /// `input` will be dropped when the stream is synced or dropped.
+    /// Does not allocate the memory asynchronously.
+    pub fn new_stream_buf(
+        handle: &Rc<Handle<'a>>,
+        input: Vec<u8>,
+        stream: &mut Stream<'a>,
+    ) -> CudaResult<Self> {
+        let buf = Self::alloc(handle, input.len() as u64)?;
+        buf.store_stream_buf(input, stream)?;
         Ok(buf)
     }
 
@@ -293,20 +344,44 @@ impl<'a> DeviceBox<'a> {
     }
 
     /// Allocates a new uninitialized buffer on the device, then synchronously fills it with `input`.
-    /// Note that memory is directly copied, so [`T`] must be [`Sized`] should not contain any pointers, references, unsized types, or other non-FFI safe types.
+    /// Note that memory is directly copied, so [`T`] must be [`Sized`] *should* not contain any pointers, references, unsized types, or other non-FFI safe types.
     /// `input` must not be dropped or mutated until `stream.sync` is called.
     /// Does not allocate the memory asynchronously.
-    pub unsafe fn new_ffi_stream<T>(
+    pub fn new_ffi_stream<'b, T>(
         handle: &Rc<Handle<'a>>,
-        input: &[T],
-        stream: &mut Stream<'a>,
+        input: &'b [T],
+        stream: &'b mut Stream<'a>,
     ) -> CudaResult<Self> {
-        let raw = std::slice::from_raw_parts(
-            input.as_ptr() as *const u8,
-            input.len() * std::mem::size_of::<T>(),
-        );
+        let raw = unsafe {
+            std::slice::from_raw_parts(
+                input.as_ptr() as *const u8,
+                input.len() * std::mem::size_of::<T>(),
+            )
+        };
         let buf = Self::alloc(handle, raw.len() as u64)?;
         buf.store_stream(raw, stream)?;
+        Ok(buf)
+    }
+
+    /// Allocates a new uninitialized buffer on the device, then synchronously fills it with `input`.
+    /// Note that memory is directly copied, so [`T`] must be [`Sized`] *should* not contain any pointers, references, unsized types, or other non-FFI safe types.
+    /// `input` will be dropped when the stream is synced or dropped.
+    /// Does not allocate the memory asynchronously.
+    pub fn new_ffi_stream_buf<'b, T>(
+        handle: &Rc<Handle<'a>>,
+        mut input: Vec<T>,
+        stream: &'b mut Stream<'a>,
+    ) -> CudaResult<Self> {
+        let raw = unsafe {
+            Vec::from_raw_parts(
+                input.as_mut_ptr() as *mut u8,
+                input.len() * std::mem::size_of::<T>(),
+                input.capacity() * std::mem::size_of::<T>(),
+            )
+        };
+        std::mem::forget(input);
+        let buf = Self::alloc(handle, raw.len() as u64)?;
+        buf.store_stream_buf(raw, stream)?;
         Ok(buf)
     }
 
