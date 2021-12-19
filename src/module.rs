@@ -197,8 +197,8 @@ impl<'a> Linker<'a> {
                 &mut size_out as *mut sys::size_t,
             )
         });
-        self.emit_logs();
         if let Err(e) = out {
+            self.emit_logs();
             return Err(e);
         }
         Ok(unsafe { std::slice::from_raw_parts(cubin_out as *const u8, size_out as usize) })
